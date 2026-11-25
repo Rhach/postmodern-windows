@@ -1,4 +1,4 @@
-# Builds minilaunch with the C# compiler that ships with Windows (.NET Framework 4.x) - no SDK needed.
+﻿# Builds minilaunch with the C# compiler that ships with Windows (.NET Framework 4.x) - no SDK needed.
 # Output: build\minilaunch\ - minilaunch.exe plus its scripts and themes, laid out ready to run or install.
 #   .\build.ps1              build
 #   .\build.ps1 -Clean       delete build\ first

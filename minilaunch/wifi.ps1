@@ -1,4 +1,4 @@
-# Wi-Fi picker for the minimal shell (replaces the taskbar network flyout).
+﻿# Wi-Fi picker for the minimal shell (replaces the taskbar network flyout).
 $iface = (netsh wlan show interfaces | Select-String '^\s+Name\s+:\s+(.+)$' | Select -First 1).Matches.Groups[1].Value.Trim()
 $cur = (netsh wlan show interfaces | Select-String '^\s+SSID\s+:\s+(.+)$' | Select -First 1)
 Write-Host "Interface: $iface    Connected to: $(if ($cur) { $cur.Matches.Groups[1].Value.Trim() } else { '(nothing)' })`n"

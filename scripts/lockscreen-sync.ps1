@@ -1,4 +1,4 @@
-# Runs as SYSTEM at boot. The lock and sign-in screens draw from pre-rendered caches under
+﻿# Runs as SYSTEM at boot. The lock and sign-in screens draw from pre-rendered caches under
 # C:\ProgramData\Microsoft\Windows\SystemData\<SID>\ReadOnly\LockScreen_<letter>. With the debloated
 # services Windows never renders them (the user's folder isn't even created), so the screen comes up
 # blank. Render the configured lock image into every slot ourselves: the system account's, plus every

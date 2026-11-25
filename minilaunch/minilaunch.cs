@@ -1321,6 +1321,11 @@ class Dock : Form {
     readonly System.Windows.Forms.Timer leave = new System.Windows.Forms.Timer { Interval = 300 };
     readonly Font titleFont, subFont, btnFont, glyphFont;
     public List<WinItem> Wins = new List<WinItem>();
+    public TrayHost Tray;                                   // tray icons follow the windows, below a divider
+    List<TrayIcon> trayShown = new List<TrayIcon>();
+    int Count { get { return Wins.Count + trayShown.Count; } }
+    bool IsTray(int i) { return i >= Wins.Count; }
+    int SepH { get { return Wins.Count > 0 && trayShown.Count > 0 ? (int)(12 * s) : 0; } }
     public int Hover = -1, HoverBtn = -1;
     public bool Expanded;
     public float Slide = 1;   // 0 = pill fully out, 1 = tucked away
@@ -1445,7 +1450,7 @@ class Dock : Form {
         return w;
     }
 
-    void RefreshList() {
+    internal void RefreshList() {
         // a Close that didn't finish (e.g. a "save changes?" prompt): bring the window back so the prompt is visible
         if (pendingClose != IntPtr.Zero && Environment.TickCount - pendingCloseAt > 900) {
             var pc = pendingClose; pendingClose = IntPtr.Zero;
@@ -1461,9 +1466,10 @@ class Dock : Form {
         foreach (var h in found) if (!next.Any(w => w.Hwnd == h)) next.Add(Describe(h));
         foreach (var w in next) HideStub(w.Hwnd);
         Wins = next;
-        if (Hover >= Wins.Count) Hover = HoverBtn = -1;
+        trayShown = Tray == null ? new List<TrayIcon>() : Tray.Shown;
+        if (Hover >= Count) Hover = HoverBtn = -1;
 
-        if (Wins.Count == 0) {
+        if (Count == 0) {
             poll.Stop();
             if (Visible) Hide();
             Expanded = false; Slide = 1; mouseInside = false;
@@ -1489,7 +1495,7 @@ class Dock : Form {
     }
 
     void UpdateExpanded() {
-        if (Wins.Count == 0) return;
+        if (Count == 0) return;
         bool want = mouseInside || !ForegroundCovers();
         if (want != Expanded) { Expanded = want; anim.Start(); }
         else Render();
@@ -1497,14 +1503,14 @@ class Dock : Form {
 
     // ---- layout ----
 
-    int PillH { get { int n = Math.Max(1, Wins.Count); return pad * 2 + n * tile + (n - 1) * (step - tile); } }
+    int PillH { get { int n = Math.Max(1, Count); return pad * 2 + n * tile + (n - 1) * (step - tile) + SepH; } }
 
     Rectangle PillRect(float slide) {
         int x = Width - margin - pillW + (int)(slide * (pillW + margin + 8 * s));
         return new Rectangle(x, (Height - PillH) / 2, pillW, PillH);
     }
 
-    Rectangle TileRect(int i, Rectangle pill) { return new Rectangle(pill.X + pad, pill.Y + pad + i * step, tile, tile); }
+    Rectangle TileRect(int i, Rectangle pill) { return new Rectangle(pill.X + pad, pill.Y + pad + i * step + (IsTray(i) ? SepH : 0), tile, tile); }
 
     Rectangle CardRect(int i, Rectangle pill) {
         var t = TileRect(i, pill);
@@ -1539,7 +1545,7 @@ class Dock : Form {
             var pill = PillRect(Slide);
             if (Slide > 0.5f) DrawEdge(g, PillRect(0));
             if (Slide < 0.99f) DrawPill(g, pill);
-            if (Expanded && Slide < 0.01f && Hover >= 0 && Hover < Wins.Count) DrawCard(g, pill, Hover);
+            if (Expanded && Slide < 0.01f && Hover >= 0 && Hover < Count) DrawCard(g, pill, Hover);
         }
         return bmp;
     }
@@ -1561,7 +1567,11 @@ class Dock : Form {
             using (var b = new LinearGradientBrush(pill, Color.FromArgb(240, Theme.Ink2), Color.FromArgb(240, Theme.Ink), 90f)) g.FillPath(b, p);
             using (var pen = new Pen(Color.FromArgb(170, Theme.Secondary), 1.2f * s)) g.DrawPath(pen, p);
         }
-        for (int i = 0; i < Wins.Count; i++) {
+        if (SepH > 0) {
+            float y = TileRect(Wins.Count, pill).Y - SepH / 2f - (step - tile) / 2f;
+            using (var pen = new Pen(Color.FromArgb(110, Theme.Secondary), 1f * s)) g.DrawLine(pen, pill.X + pad + 6 * s, y, pill.Right - pad - 6 * s, y);
+        }
+        for (int i = 0; i < Count; i++) {
             var t = TileRect(i, pill);
             if (i == Hover) {
                 using (var p = Theme.Rounded(t, 10 * s)) {
@@ -1569,6 +1579,11 @@ class Dock : Form {
                     using (var pen = new Pen(Color.FromArgb(220, Theme.Primary), 1.2f * s)) g.DrawPath(pen, p);
                 }
                 Wallpaper.Neon(g, Theme.Primary, pill.X + 2.5f * s, t.Y + 10 * s, pill.X + 2.5f * s, t.Bottom - 10 * s, 2 * s);
+            }
+            if (IsTray(i)) {   // tray icons are small-icon artwork: draw them at tray size, not stretched
+                float tsz = 20 * s;
+                g.DrawImage(trayShown[i - Wins.Count].Icon, t.X + (tile - tsz) / 2, t.Y + (tile - tsz) / 2, tsz, tsz);
+                continue;
             }
             float isz = 30 * s;
             var icon = Wins[i].Icon;
@@ -1582,6 +1597,7 @@ class Dock : Form {
     }
 
     void DrawCard(Graphics g, Rectangle pill, int i) {
+        if (IsTray(i)) { DrawTrayCard(g, pill, i); return; }
         var w = Wins[i];
         var c = CardRect(i, pill);
         using (var b = new SolidBrush(Color.FromArgb(2, 0, 0, 0))) g.FillRectangle(b, Bridge(c, TileRect(i, pill)));
@@ -1624,6 +1640,30 @@ class Dock : Form {
         }
     }
 
+    // tray icons get a compact card: the app's tooltip, and what the clicks do
+    void DrawTrayCard(Graphics g, Rectangle pill, int i) {
+        var ti = trayShown[i - Wins.Count];
+        var full = CardRect(i, pill);
+        int h = (int)(62 * s);
+        var c = new Rectangle(full.X, Math.Max((int)(8 * s), Math.Min(Height - h - (int)(8 * s), full.Y + (full.Height - h) / 2)), full.Width, h);
+        using (var b = new SolidBrush(Color.FromArgb(2, 0, 0, 0))) g.FillRectangle(b, Bridge(c, TileRect(i, pill)));
+        float r = 12 * s;
+        using (var p = Theme.Rounded(c, r)) {
+            using (var b = new LinearGradientBrush(c, Color.FromArgb(245, Theme.Ink2), Color.FromArgb(245, Theme.Ink), 90f)) g.FillPath(b, p);
+            using (var pen = new Pen(Color.FromArgb(200, Theme.Primary), 1.2f * s)) g.DrawPath(pen, p);
+        }
+        float m = 12 * s, isz = 20 * s;
+        g.DrawImage(ti.Icon, c.X + m, c.Y + m, isz, isz);
+        var tip = ti.Tip.Split('\n')[0].Trim();
+        using (var sf = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap })
+        using (var tb = new SolidBrush(Theme.HudText))
+        using (var pb = new SolidBrush(Theme.Primary)) {
+            float tx = c.X + m + isz + 10 * s, tw = c.Right - m - tx;
+            g.DrawString(tip.Length > 0 ? tip : ti.Proc, titleFont, tb, new RectangleF(tx, c.Y + m - 2 * s, tw, 18 * s), sf);
+            g.DrawString("CLICK OPEN  //  RIGHT-CLICK MENU", subFont, pb, new RectangleF(tx, c.Y + m + 19 * s, tw, 16 * s), sf);
+        }
+    }
+
     void Render() {
         if (!IsHandleCreated || !Visible) return;
         using (var bmp = Compose()) {
@@ -1650,13 +1690,15 @@ class Dock : Form {
         tileIdx = -1; btn = -1;
         if (!Expanded) return;
         var pill = PillRect(Slide);
-        for (int i = 0; i < Wins.Count; i++) if (TileRect(i, pill).Contains(p)) { tileIdx = i; return; }
-        if (Hover >= 0 && Hover < Wins.Count) {
+        for (int i = 0; i < Count; i++) if (TileRect(i, pill).Contains(p)) { tileIdx = i; return; }
+        if (Hover >= 0 && Hover < Count) {
             var c = CardRect(Hover, pill);
             if (c.Contains(p)) {
                 tileIdx = Hover;
-                var bs = Buttons(c);
-                for (int k = 0; k < 3; k++) if (bs[k].Contains(p)) btn = k;
+                if (!IsTray(Hover)) {
+                    var bs = Buttons(c);
+                    for (int k = 0; k < 3; k++) if (bs[k].Contains(p)) btn = k;
+                }
                 return;
             }
             if (Bridge(c, TileRect(Hover, pill)).Contains(p) || pill.Contains(p)) tileIdx = Hover;
@@ -1678,12 +1720,24 @@ class Dock : Form {
         leave.Start();
     }
 
-    protected override void OnMouseUp(MouseEventArgs e) {
-        base.OnMouseUp(e);
-        if (e.Button != MouseButtons.Left) return;
+    protected override void OnMouseDoubleClick(MouseEventArgs e) {
+        base.OnMouseDoubleClick(e);
         int t, b;
         HitTest(e.Location, out t, out b);
-        if (t < 0 || t >= Wins.Count) return;
+        if (e.Button == MouseButtons.Left && t >= 0 && t < Count && IsTray(t)) TrayHost.DoubleClick(trayShown[t - Wins.Count], Cursor.Position);
+    }
+
+    protected override void OnMouseUp(MouseEventArgs e) {
+        base.OnMouseUp(e);
+        int t, b;
+        HitTest(e.Location, out t, out b);
+        if (t < 0 || t >= Count) return;
+        if (IsTray(t)) {
+            if (e.Button == MouseButtons.Left || e.Button == MouseButtons.Right)
+                TrayHost.Click(trayShown[t - Wins.Count], e.Button == MouseButtons.Right, Cursor.Position);
+            return;
+        }
+        if (e.Button != MouseButtons.Left) return;
         var w = Wins[t];
         Hover = HoverBtn = -1;
         switch (b < 0 ? 0 : b) {
@@ -1695,6 +1749,148 @@ class Dock : Form {
                 break;
         }
         settle.Stop(); settle.Start();
+    }
+}
+
+class TrayIcon {
+    public IntPtr Hwnd;        // the app's window that receives the callback
+    public uint Id, CallbackMsg, Version;
+    public Guid Guid;
+    public string Tip = "", Proc = "";
+    public Bitmap Icon;
+    public bool Hidden;
+}
+
+// A minimal notification area. Apps reach the tray through the window of class Shell_TrayWnd, which
+// explorer's taskbar normally owns; with none, Shell_NotifyIcon fails and some apps (Boot Camp, which
+// also runs the MacBook's brightness keys) exit outright. This window accepts their icons and the dock
+// shows them. Only created in shell mode: with explorer running, its own taskbar does this.
+class TrayHost : NativeWindow {
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    struct WNDCLASS { public uint style; public IntPtr proc; public int cls, wnd; public IntPtr inst, icon, cursor, bg; public string menu, name; }
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern ushort RegisterClass(ref WNDCLASS c);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern IntPtr CreateWindowEx(int ex, string cls, string title, int style, int x, int y, int w, int h, IntPtr parent, IntPtr menu, IntPtr inst, IntPtr p);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern IntPtr GetModuleHandle(string n);
+    [DllImport("kernel32.dll", CharSet = CharSet.Ansi)] static extern IntPtr GetProcAddress(IntPtr m, string name);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern uint RegisterWindowMessage(string s);
+    [DllImport("user32.dll")] static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
+    [DllImport("user32.dll")] static extern bool IsWindow(IntPtr h);
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+    [DllImport("user32.dll")] static extern bool AllowSetForegroundWindow(uint pid);
+    [DllImport("user32.dll")] static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
+
+    public readonly List<TrayIcon> Icons = new List<TrayIcon>();
+    public event Action Changed = delegate { };
+
+    public TrayHost() {
+        // Created by hand and then subclassed: WinForms' own CreateHandle only finds global window classes.
+        var wc = new WNDCLASS { proc = GetProcAddress(GetModuleHandle("user32.dll"), "DefWindowProcW"), inst = GetModuleHandle(null), name = "Shell_TrayWnd" };
+        if (RegisterClass(ref wc) == 0) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(), "RegisterClass Shell_TrayWnd");
+        var h = CreateWindowEx(0x80 /* TOOLWINDOW */, "Shell_TrayWnd", "", 0, 0, 0, 0, 0, IntPtr.Zero, IntPtr.Zero, wc.inst, IntPtr.Zero);
+        if (h == IntPtr.Zero) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(), "CreateWindowEx Shell_TrayWnd");
+        AssignHandle(h);
+        // apps that were already running (a minilaunch restart) re-add their icons when they see this
+        PostMessage((IntPtr)0xFFFF /* HWND_BROADCAST */, RegisterWindowMessage("TaskbarCreated"), IntPtr.Zero, IntPtr.Zero);
+    }
+
+    public List<TrayIcon> Shown {
+        get {
+            Icons.RemoveAll(i => !IsWindow(i.Hwnd));   // the app quit without removing its icon
+            return Icons.Where(i => !i.Hidden && i.Icon != null).ToList();
+        }
+    }
+
+    protected override void WndProc(ref Message m) {
+        if (m.Msg == 0x4A /* WM_COPYDATA */) {
+            var dwData = Marshal.ReadIntPtr(m.LParam);
+            var lpData = Marshal.ReadIntPtr(m.LParam, IntPtr.Size * 2);
+            // dwData 1 = Shell_NotifyIcon; 0 = SHAppBarMessage, 3 = icon-position queries: no taskbar to report
+            if ((long)dwData == 1 && lpData != IntPtr.Zero) { m.Result = (IntPtr)(Notify(lpData) ? 1 : 0); return; }
+            m.Result = IntPtr.Zero;
+            return;
+        }
+        base.WndProc(ref m);
+    }
+
+    // TRAYNOTIFYDATA: signature, message, then NOTIFYICONDATAW with handles as 32-bit values (so 32- and
+    // 64-bit apps share one layout): cbSize 8, hWnd 12, uID 16, uFlags 20, uCallbackMessage 24, hIcon 28,
+    // szTip 32 (128 chars), dwState 288, dwStateMask 292, szInfo 296, uVersion 808, ..., guidItem 944.
+    bool Notify(IntPtr p) {
+        if (Marshal.ReadInt32(p) != 0x34753423) return false;
+        int msg = Marshal.ReadInt32(p, 4), cb = Marshal.ReadInt32(p, 8);
+        var hwnd = (IntPtr)Marshal.ReadInt32(p, 12);
+        uint id = (uint)Marshal.ReadInt32(p, 16), flags = (uint)Marshal.ReadInt32(p, 20);
+        var guid = Guid.Empty;
+        if ((flags & 0x20) != 0 && cb >= 952) { var g = new byte[16]; Marshal.Copy(p + 944, g, 0, 16); guid = new Guid(g); }
+        var icon = Icons.FirstOrDefault(i => guid != Guid.Empty ? i.Guid == guid : i.Hwnd == hwnd && i.Id == id);
+
+        switch (msg) {
+            case 0:   // NIM_ADD
+                if (icon != null) return false;
+                icon = new TrayIcon { Hwnd = hwnd, Id = id, Guid = guid, Proc = ProcName(hwnd) };
+                Icons.Add(icon);
+                Apply(icon, p, flags);
+                break;
+            case 1:   // NIM_MODIFY
+                if (icon == null) return false;
+                Apply(icon, p, flags);
+                break;
+            case 2:   // NIM_DELETE
+                if (icon == null) return false;
+                if (icon.Icon != null) icon.Icon.Dispose();
+                Icons.Remove(icon);
+                break;
+            case 4:   // NIM_SETVERSION
+                if (icon == null) return false;
+                icon.Version = (uint)Marshal.ReadInt32(p, 808);
+                return true;
+            default: return true;   // NIM_SETFOCUS
+        }
+        Changed();
+        return true;
+    }
+
+    void Apply(TrayIcon icon, IntPtr p, uint flags) {
+        if ((flags & 0x1) != 0) icon.CallbackMsg = (uint)Marshal.ReadInt32(p, 24);                    // NIF_MESSAGE
+        if ((flags & 0x2) != 0) {                                                                       // NIF_ICON
+            // copy it now: the app may destroy its icon handle right after the call
+            var h = (IntPtr)Marshal.ReadInt32(p, 28);
+            if (icon.Icon != null) icon.Icon.Dispose();
+            icon.Icon = h == IntPtr.Zero ? null : global::Icons.FromBorrowed(h);
+        }
+        if ((flags & 0x4) != 0) icon.Tip = (Marshal.PtrToStringUni(p + 32, 128) ?? "").Split('\0')[0];  // NIF_TIP
+        if ((flags & 0x8) != 0) {                                                                       // NIF_STATE
+            uint state = (uint)Marshal.ReadInt32(p, 288), mask = (uint)Marshal.ReadInt32(p, 292);
+            if ((mask & 1) != 0) icon.Hidden = (state & 1) != 0;                                        // NIS_HIDDEN
+        }
+    }
+
+    static string ProcName(IntPtr hwnd) {
+        uint pid; GetWindowThreadProcessId(hwnd, out pid);
+        try { return Process.GetProcessById((int)pid).ProcessName; } catch { return ""; }
+    }
+
+    // Tells the app its icon was clicked, in the message format it asked for (NIM_SETVERSION).
+    public static void Click(TrayIcon icon, bool right, Point screen) {
+        uint down = right ? 0x204u : 0x201u, up = right ? 0x205u : 0x202u;   // WM_[RL]BUTTONDOWN / UP
+        uint after = right ? 0x7Bu : 0x400u;                                  // WM_CONTEXTMENU / NIN_SELECT
+        Send(icon, screen, icon.Version >= 3 ? new[] { down, up, after } : new[] { down, up });
+    }
+
+    // Older tray apps open their window on a double-click rather than a click.
+    public static void DoubleClick(TrayIcon icon, Point screen) { Send(icon, screen, new[] { 0x203u /* WM_LBUTTONDBLCLK */, 0x202u }); }
+
+    static void Send(TrayIcon icon, Point screen, uint[] events) {
+        uint pid; GetWindowThreadProcessId(icon.Hwnd, out pid);
+        // the click on the dock gave us foreground rights; pass them on so the app's menu or window can come forward
+        keybd_event(0, 0, 0, UIntPtr.Zero); keybd_event(0, 0, 2, UIntPtr.Zero);
+        AllowSetForegroundWindow(pid);
+        // v4: lParam = LOWORD event, HIWORD icon id; wParam = anchor point. Older: wParam = id, lParam = event.
+        var anchor = (IntPtr)((screen.Y << 16) | (screen.X & 0xFFFF));
+        foreach (var ev in events)
+            if (icon.Version >= 4) PostMessage(icon.Hwnd, icon.CallbackMsg, anchor, (IntPtr)(((int)icon.Id << 16) | (int)ev));
+            else PostMessage(icon.Hwnd, icon.CallbackMsg, (IntPtr)icon.Id, (IntPtr)ev);
     }
 }
 
@@ -2036,6 +2232,7 @@ static class Program {
     static SessionFocus sessionFocus;
     static DesktopForm desktop;
     static Dock dock;
+    static TrayHost tray;
     static Gestures gestures;
     static Switcher switcher;
 
@@ -2172,6 +2369,23 @@ static class Program {
             GC.KeepAlive(g);
             return;
         }
+        if (args.Length >= 1 && args[0] == "--test-tray") {
+            // --test-tray [exe]: run the tray on its own, start exe (or nothing), list the icons it collects after
+            // 10 s and exit. Must not be run while minilaunch is the shell (both would own Shell_TrayWnd).
+            var t = new TrayHost();
+            if (args.Length >= 2) Process.Start(args[1]);
+            var timer = new System.Windows.Forms.Timer { Interval = 10000 };
+            timer.Tick += delegate {
+                foreach (var i in t.Icons)
+                    Console.WriteLine("icon: " + (i.Proc.Length > 0 ? i.Proc : "?") + "  id " + i.Id + "  v" + i.Version + "  msg 0x" + i.CallbackMsg.ToString("X") +
+                                      "  hidden " + i.Hidden + "  image " + (i.Icon != null) + "  tip \"" + i.Tip.Replace("\n", " / ") + "\"");
+                Console.WriteLine(t.Icons.Count + " icon(s)");
+                Application.Exit();
+            };
+            timer.Start();
+            Application.Run();
+            return;
+        }
         if (args.Length >= 2 && args[0] == "--query") {
             Index.LoadHistory();
             Index.Rebuild();
@@ -2188,7 +2402,6 @@ static class Program {
             Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
             Application.ThreadException += (o, e) => Index.Log(e.Exception.ToString());
             AppDomain.CurrentDomain.UnhandledException += (o, e) => Index.Log(e.ExceptionObject.ToString());
-            if (Index.ShellMode) ShellDuties();
             Index.LoadHistory();
             Index.Rebuild();
             Application.EnableVisualStyles();
@@ -2200,6 +2413,16 @@ static class Program {
                 switcher = new Switcher();
                 gestures = new Gestures(dir => switcher.Step(dir));
                 sessionFocus = new SessionFocus();
+            }
+            if (Index.ShellMode) {
+                // the tray must exist before the startup apps run, or they find no tray (and some quit).
+                // It's an extra: if it can't be set up, the shell carries on without it.
+                try {
+                    tray = new TrayHost();
+                    dock.Tray = tray;
+                    tray.Changed += () => dock.RefreshList();
+                } catch (Exception ex) { Index.Log("tray disabled: " + ex); tray = null; }
+                ShellDuties();
             }
             Application.Run(launcher);
         }

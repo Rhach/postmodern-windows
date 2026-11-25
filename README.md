@@ -10,9 +10,9 @@ built on, the whole system idled at about **1.3 GB of RAM and 3% CPU**; turning 
 
 ![Cyberpunk theme](docs/screenshots/cyberpunk.jpg)
 
-> **Status: pre-release.** This repo currently holds minilaunch, its themes and the helper scripts. The
-> installer that applies the full setup (debloat, shell, terminal, lock screen) is being written; see
-> [docs/INVENTORY.md](docs/INVENTORY.md) for exactly what it will change.
+> **Status: pre-release.** The installer works end to end in dry-run mode on the reference machine;
+> a full install/uninstall test on a clean Windows 10 virtual machine is next. Until then, read
+> [docs/INVENTORY.md](docs/INVENTORY.md) (every change it makes) and use `-WhatIf` first.
 
 ## What you get
 
@@ -22,6 +22,7 @@ built on, the whole system idled at about **1.3 GB of RAM and 3% CPU**; turning 
 - **Desktop**: wallpaper with a live clock and RAM, CPU, battery and network readout. Right-click for a
   power menu; double-click for the launcher.
 - **Dock**: minimized windows collect on the right edge; it tucks away when a window covers it.
+  Tray icons (the notification area) sit below them: click, right-click and double-click work as usual.
 - **Swipes**: three fingers left or right walks through open windows (needs a precision touchpad).
 - **Themes**: nine of them, each with its own wallpaper, lock screen, accent colours, HUD text and
   Windows Terminal colour scheme. Tap Win, type `theme`.
@@ -44,7 +45,7 @@ This is a deliberate trade. Without Explorer:
 - The **Settings app, Microsoft Store apps and the Windows Security app** don't open (they need Explorer's
   shell). Classic tools all work, and the launcher lists them: Control Panel, Network Connections, Sound,
   Power Options, Device Manager, a Wi-Fi picker and so on.
-- There's no taskbar, system tray or notification centre.
+- There's no taskbar, notification centre or toast notifications. Tray icons live in the dock.
 - The desktop covers the primary monitor only.
 
 Switching back is one script and a sign-out: `scripts\shell-explorer.cmd`.
@@ -57,18 +58,50 @@ Switching back is one script and a sign-out: `scripts\shell-explorer.cmd`.
   `-KeepUpdates` leaves it alone (for example on machines with extended security updates).
 - **CPU vulnerability mitigations are left on.** Turning them off is a separate opt-in.
 
+## Install
+
+Windows 10 22H2, 64-bit. Download or clone this repo, open PowerShell in its folder and run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -WhatIf   # see what would change; changes nothing
+powershell -ExecutionPolicy Bypass -File .\install.ps1           # install: pick a theme, confirm, restart
+```
+
+It asks for administrator rights once, makes a System Restore point first, records the original value of
+everything it changes, and needs one restart. The desktop changes for your account only; other accounts on
+the PC keep Explorer. Options (all off by default):
+
+| | |
+|---|---|
+| `-Theme zen` | skip the theme question |
+| `-KeepUpdates` | leave Windows Update on |
+| `-NoPrinting` / `-NoSharing` | also switch off printing / file sharing, Remote Desktop and network discovery |
+| `-Aggressive` | also switch off smart cards, Windows Hello, EFS and other rarely used services |
+| `-NoLocation`, `-NoHypervisor`, `-NoCpuMitigations` | what they say (the last two have real costs; see the script) |
+| `-Font Iosevka` | Iosevka in the terminal instead of Cascadia Mono (169 MB download) |
+| `-VpnInterface Tailscale` | show that adapter's address on the desktop |
+
+Afterwards:
+
+```powershell
+& "C:\Program Files\postmodern-windows\doctor.ps1"      # check nothing has drifted (e.g. after a Windows update)
+& "C:\Program Files\postmodern-windows\uninstall.ps1"   # put everything back
+```
+
+The uninstaller can't bring back the few Store apps it removes (reinstall them from the Store); everything
+else is restored from the journal. Downloads (Windows Terminal, and on MacBooks the trackpad driver) are
+pinned to exact versions and verified by SHA-256.
+
 ## Build
 
-Requires Windows 10 (22H2, x64). No SDK needed: minilaunch compiles with the C# compiler built into the
-.NET Framework.
+No SDK needed: minilaunch compiles with the C# compiler built into the .NET Framework. The installer builds
+it for you; to build or try it by hand:
 
 ```powershell
 .\build.ps1
 .\build\minilaunch\minilaunch.exe --desktop          # try it without replacing Explorer
 .\build\minilaunch\minilaunch.exe --render shot.png  # render the desktop to an image
 ```
-
-Make it your shell (per user, no admin): `scripts\shell-minimal.cmd`, then sign out.
 
 ## Known limitations
 

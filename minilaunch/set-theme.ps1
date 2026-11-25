@@ -1,10 +1,11 @@
-# Pick and apply a minilaunch theme: desktop wallpaper + colours, Windows Terminal scheme, lock screen.
+﻿# Pick and apply a minilaunch theme: desktop wallpaper + colours, Windows Terminal scheme, lock screen.
 #   set-theme.ps1                 interactive picker (Enter keeps the default, cyberpunk)
 #   set-theme.ps1 -Theme zen      apply without asking
 #   set-theme.ps1 -List           list themes
+#   set-theme.ps1 -Pick           just ask, and output the chosen theme id (used by install.ps1)
 # Options: -NoLockScreen (skip the admin step), -NoRestart (don't restart minilaunch).
 # Works in Windows PowerShell 5.1 and PowerShell 7.
-param([string]$Theme, [switch]$List, [switch]$NoLockScreen, [switch]$NoRestart, [switch]$LockOnly, [string]$TerminalSettings)
+param([string]$Theme, [switch]$List, [switch]$Pick, [switch]$NoLockScreen, [switch]$NoRestart, [switch]$LockOnly, [string]$TerminalSettings)
 $ErrorActionPreference = 'Stop'
 if (-not $TerminalSettings) {
     # the portable Terminal minilaunch uses (same setting and default as minilaunch.exe)
@@ -69,6 +70,7 @@ if (-not $Theme) {
 }
 $t = $themes | ? { $_.Id -eq $Theme -or $_.Name -eq $Theme } | Select -First 1
 if (-not $t) { throw "unknown theme '$Theme' - try: $(($themes.Id) -join ', ')" }
+if ($Pick) { return $t.Id }
 
 if ($LockOnly) { Set-LockScreen $t; return }
 

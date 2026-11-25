@@ -14,14 +14,15 @@ Disposition column — what the installer does with each item:
 
 | Change | Mechanism | Disposition |
 |---|---|---|
-| minilaunch replaces Explorer as the shell | `Winlogon\Shell` in HKLM **and** HKCU | core, **HKCU only** |
+| minilaunch replaces Explorer as the shell | `Winlogon\Shell` in HKLM **and** HKCU | core, **HKCU only**; files in `C:\Program Files\postmodern-windows` (admin-only, because a SYSTEM task runs a script from there) |
+| Notification area (tray) for apps like Boot Camp | minilaunch's own `Shell_TrayWnd`; icons shown in the dock | core (added after the reference setup: without a tray Boot Camp quit, taking the MacBook brightness keys with it) |
 | Launcher, desktop HUD, dock, swipe switcher | minilaunch.exe (C#, built with in-box csc) | core |
 | Wallpaper | `minilaunch\wallpaper.jpg` | core (bundled, credited) |
 | Shell switch scripts | `shell-explorer.cmd` / `shell-minimal.cmd` | core (generalised) |
 | Wi-Fi picker | `wifi.ps1` | core |
 | Lock + sign-in image | PersonalizationCSP keys, `DisableLogonBackgroundImage=0`, `DisableAcrylicBackgroundOnLogon=1`, plus the `LockScreenSync` SYSTEM task (`lockscreen-sync.ps1`) that writes LogonUI's SYSTEM-profile copies | core |
-| Iosevka font, conhost font = Iosevka→Consolas | font install + `Console\TrueTypeFont` + `HKCU\Console` | core (Terminal only; conhost stays Consolas) |
-| Portable Windows Terminal, "Neon Night" | unpacked to `bin\terminal` | core (pinned download + hash) |
+| Iosevka font, conhost font = Iosevka→Consolas | font install + `Console\TrueTypeFont` + `HKCU\Console` | opt (`-Font Iosevka`, a 169 MB download); default is the Terminal's bundled Cascadia Mono |
+| Portable Windows Terminal, per-theme colour scheme | unpacked to `bin\terminal` | core: v1.25.3131.0, SHA-256 pinned, per user in `%LOCALAPPDATA%\postmodern-windows\terminal` |
 | `AutoRestartShell` | toggled during development, now back to 1 | no |
 | First attempt: `minishell.vbs` shell | superseded by minilaunch | no |
 
@@ -50,17 +51,17 @@ instances (`_6a68b`, now `_3cd7e8`) follow the template on each logon.
 ## 3. Scheduled tasks
 
 Disabled by path: Application Experience, Autochk, CEIP, DiskDiagnostic, Feedback\Siuf, Windows
-Error Reporting, Maps, CloudExperienceHost, Defrag, Diagnosis, Maintenance, Power Efficiency
-Diagnostics, Location, Flighting, FileHistory, Shell, Work Folders, Workplace Join, Mobile Broadband
-Accounts, NetTrace, RetailDemo, Speech, WDI, XblGameSave, MemoryDiagnostic, DiskFootprint, PI,
-Registry, SettingSync, Chkdsk, StateRepository, Time Zone, Device Information,
-Management\Provisioning, Windows Media Sharing, Sysmain, Office, MicrosoftEdgeUpdate*, OneDrive*
-→ **core**.
+Error Reporting, Maps, CloudExperienceHost, Diagnosis, Power Efficiency Diagnostics, Location,
+Flighting, FileHistory, Shell, Work Folders, Workplace Join, Mobile Broadband Accounts, NetTrace,
+RetailDemo, Speech, WDI, XblGameSave, MemoryDiagnostic, DiskFootprint, PI, SettingSync, Device
+Information, Windows Media Sharing, Sysmain, MicrosoftEdgeUpdate*, OneDrive* → **core**.
 
 WindowsUpdate, UpdateOrchestrator, InstallService, Servicing, WaaSMedic → **core** (`-KeepUpdates` opts out).
 Windows Defender tasks → re-enabled (**no**).
 
-Open questions: Defrag also does SSD TRIM (keep TRIM); Chkdsk/Autochk are disk-health related.
+Disabled on the reference machine but **left alone by the installer**, because they matter more on
+someone else's PC: Defrag (on SSDs it sends TRIM), Maintenance, Chkdsk, Registry (registry backups),
+StateRepository, Time Zone, Management\Provisioning, Office (keeps Office itself updated).
 
 ## 4. Policies and registry tweaks
 
