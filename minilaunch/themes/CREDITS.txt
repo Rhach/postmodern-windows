@@ -1,0 +1,6 @@
+Theme art credits
+
+All wallpapers (wallpaper.jpg) and lock-screen images (lock.jpg) in these folders were generated with
+OpenAI's image generation tool via Codex CLI (codex-cli 0.169.0) on 2026-11-25, from prompts written
+for this project. The hacker wallpaper is an edit of an earlier generated image (monitors replaced).
+Originals: cyberpunk 1586x992, all others 1672x941 PNG, saved here as JPEG (q92).
