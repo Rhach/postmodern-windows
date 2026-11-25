@@ -19,6 +19,7 @@ Options
   -Font Iosevka        use Iosevka in the terminal (169 MB download; default: Cascadia Mono)
   -VpnInterface <name> show this network adapter's address on the desktop (e.g. Tailscale)
   -NoReboot            don't offer to restart at the end
+  -Yes                 don't ask: install without confirming, and don't offer a restart (for scripts)
   -Force               run on Windows versions other than Windows 10 22H2 (untested)
 #>
 param(
@@ -28,7 +29,7 @@ param(
     [switch]$NoLocation, [switch]$NoHypervisor, [switch]$NoCpuMitigations,
     [ValidateSet('Cascadia', 'Iosevka')][string]$Font = 'Cascadia',
     [string]$VpnInterface,
-    [switch]$NoReboot, [switch]$Force,
+    [switch]$NoReboot, [switch]$Force, [switch]$Yes,
     [switch]$Doctor,                                                   # used by doctor.ps1
     [ValidateSet('All', 'Machine', 'User')][string]$Part = 'All',     # internal: the elevated half
     [string]$Log                                                       # internal
@@ -113,7 +114,7 @@ if ($mode -eq 'Apply') {
     Write-Host '  This switches off background services, telemetry and bundled apps, replaces the Explorer desktop'
     Write-Host '  with minilaunch for your account, and needs a restart. A restore point is made first, and'
     Write-Host '  uninstall.ps1 puts every setting back.'
-    if ((Read-Host "`n  Continue? [y/N]") -notmatch '^(y|yes)$') { Write-Host '  Nothing changed.'; exit 0 }
+    if (-not $Yes -and (Read-Host "`n  Continue? [y/N]") -notmatch '^(y|yes)$') { Write-Host '  Nothing changed.'; exit 0 }
 }
 
 # ---------------------------------------------------------------- machine half (elevated once)
@@ -156,7 +157,7 @@ switch ($mode) {
         else { Write-Host "`n  Installed." -ForegroundColor Green }
         Write-Host "  Restart to switch to the new desktop. Afterwards: tap the Windows key to search, right-click"
         Write-Host "  the desktop for a menu. To undo everything: $installDir\uninstall.ps1"
-        if (-not $NoReboot -and (Read-Host "`n  Restart now? [y/N]") -match '^(y|yes)$') { Restart-Computer -Force }
+        if (-not $NoReboot -and -not $Yes -and (Read-Host "`n  Restart now? [y/N]") -match '^(y|yes)$') { Restart-Computer -Force }
     }
 }
 exit $(if ($failed) { 1 } else { 0 })

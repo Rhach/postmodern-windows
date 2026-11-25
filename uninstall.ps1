@@ -7,7 +7,7 @@ Your account goes back to the Explorer desktop at the next sign-in. Two things i
 Store apps (reinstall them from the Microsoft Store) and the restore point it made (that one stays, as a
 second way back). Needs administrator rights once and a restart.
 #>
-param([switch]$NoReboot, [ValidateSet('All', 'Machine')][string]$Part = 'All', [string]$Log)
+param([switch]$NoReboot, [switch]$Yes, [ValidateSet('All', 'Machine')][string]$Part = 'All', [string]$Log)
 $ErrorActionPreference = 'Stop'
 if ($PSVersionTable.PSEdition -eq 'Core') {
     & "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath @args
@@ -79,7 +79,7 @@ if ($Part -eq 'Machine') {
 }
 
 Write-Host "`n  postmodern-windows  ·  uninstall`n" -ForegroundColor Cyan
-if ((Read-Host '  Put everything back and return to the Explorer desktop? [y/N]') -notmatch '^(y|yes)$') { exit 0 }
+if (-not $Yes -and (Read-Host '  Put everything back and return to the Explorer desktop? [y/N]') -notmatch '^(y|yes)$') { exit 0 }
 
 # your account first (as you), so the shell is Explorer again before minilaunch's files go
 Write-Host "`n  [user: $env:USERNAME]" -ForegroundColor Cyan
@@ -100,4 +100,4 @@ else {
 
 if ($uf -or $mf) { Write-Host "`n  Finished with some failures (listed above); the journals were kept so you can run this again." -ForegroundColor Yellow }
 else { Write-Host "`n  Uninstalled. Restart to get the Explorer desktop back." -ForegroundColor Green }
-if (-not $NoReboot -and (Read-Host "`n  Restart now? [y/N]") -match '^(y|yes)$') { Restart-Computer -Force }
+if (-not $NoReboot -and -not $Yes -and (Read-Host "`n  Restart now? [y/N]") -match '^(y|yes)$') { Restart-Computer -Force }
