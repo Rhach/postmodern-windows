@@ -26,7 +26,7 @@ $log = 'C:\Windows\Temp\lockscreen-sync.log'
     $sysKey = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\SystemProtectedUserData\S-1-5-18\AnyoneRead\LockScreen'
     $sysSlots = @(Get-ChildItem "$data\S-1-5-18\ReadOnly" -Directory -Filter 'LockScreen_*' -EA SilentlyContinue | % { $_.Name.Substring(11) })
     $order = 'P' + (-join ($sysSlots | ? { $_ -ne 'P' }))
-    New-Item $sysKey -Force | Out-Null
+    if (-not (Test-Path $sysKey)) { New-Item $sysKey -Force | Out-Null }   # -Force on an existing key would wipe its values
     Set-ItemProperty $sysKey '(default)' $order
     # ...and checks which source image the slot was made from against the policy path (GPImagePath_<slot>)
     New-ItemProperty $sysKey 'GPImagePath_P' -Value $src -PropertyType String -Force | Out-Null

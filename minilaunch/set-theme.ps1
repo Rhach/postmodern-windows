@@ -39,7 +39,7 @@ function Get-Themes {
 function Set-LockScreen($t) {
     Copy-Item (Join-Path $t.Dir 'lock.jpg') $lockDst -Force
     $csp = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP'
-    New-Item $csp -Force | Out-Null
+    if (-not (Test-Path $csp)) { New-Item $csp -Force | Out-Null }   # -Force on an existing key would wipe its other values
     New-ItemProperty $csp LockScreenImagePath -Value $lockDst -PropertyType String -Force | Out-Null
     New-ItemProperty $csp LockScreenImageUrl -Value $lockDst -PropertyType String -Force | Out-Null
     New-ItemProperty $csp LockScreenImageStatus -Value 1 -PropertyType DWord -Force | Out-Null
@@ -75,7 +75,7 @@ if ($Pick) { return $t.Id }
 if ($LockOnly) { Set-LockScreen $t; return }
 
 # 1. desktop: minilaunch reads this at startup
-New-Item 'HKCU:\Software\minilaunch' -Force | Out-Null
+if (-not (Test-Path 'HKCU:\Software\minilaunch')) { New-Item 'HKCU:\Software\minilaunch' -Force | Out-Null }   # never -Force an existing key: it wipes TerminalExe etc.
 Set-ItemProperty 'HKCU:\Software\minilaunch' Theme $t.Id
 Write-Host "  desktop      -> $($t.Name)"
 

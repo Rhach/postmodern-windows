@@ -60,8 +60,10 @@ static class Index {
     // Runs a command line in a terminal window: Windows Terminal when installed, else a bare console.
     public static ProcessStartInfo InTerminal(string exe, string args) {
         if (!HasTerminal) return new ProcessStartInfo(exe, args) { UseShellExecute = true };
-        // wt treats ';' as its own subcommand separator; escape it so it reaches the shell intact
-        return new ProcessStartInfo(TerminalExe, exe + " " + args.Replace(";", "\\;")) { UseShellExecute = true };
+        // wt treats ';' as its own subcommand separator; escape it so it reaches the shell intact.
+        // Quote the program: PowerShell 7's full path has spaces in it.
+        var prog = exe.Contains(" ") && !exe.StartsWith("\"") ? "\"" + exe + "\"" : exe;
+        return new ProcessStartInfo(TerminalExe, prog + " " + args.Replace(";", "\\;")) { UseShellExecute = true };
     }
 
     static readonly string DataDir = Path.Combine(
