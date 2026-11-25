@@ -5,7 +5,7 @@ param([string[]]$Journal)
 . (Join-Path $PSScriptRoot '..\lib\engine.ps1')
 $bad = 0; $checked = 0
 foreach ($j in $Journal) {
-    foreach ($e in @(Get-Content $j -Raw | ConvertFrom-Json)) {
+    foreach ($e in (Read-Journal $j)) {
         $ok = $null
         switch ($e.Type) {
             'reg' {

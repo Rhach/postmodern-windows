@@ -10,9 +10,9 @@ built on, the whole system idled at about **1.3 GB of RAM and 3% CPU**; turning 
 
 ![Cyberpunk theme](docs/screenshots/cyberpunk.jpg)
 
-> **Status: pre-release.** The installer works end to end in dry-run mode on the reference machine;
-> a full install/uninstall test on a clean Windows 10 virtual machine is next. Until then, read
-> [docs/INVENTORY.md](docs/INVENTORY.md) (every change it makes) and use `-WhatIf` first.
+> **Status: pre-release.** Install, doctor and uninstall have been tested end to end on a clean
+> Windows 10 22H2 virtual machine. Still: read [docs/INVENTORY.md](docs/INVENTORY.md) (every change it
+> makes) and run `-WhatIf` first.
 
 ## What you get
 
@@ -105,7 +105,13 @@ it for you; to build or try it by hand:
 
 ## Known limitations
 
-- Tested on one machine so far (2012 MacBook Pro, Windows 10 Pro 22H2). Windows 11 is untested.
+- Tested on a 2012 MacBook Pro and on a clean Windows 10 Pro 22H2 virtual machine (install, restart,
+  doctor, uninstall, restart: every recorded value restored). Windows 11 is untested.
+- Windows switches its own `WindowsUpdate\Scheduled Start` task back on at boot, so `doctor.ps1` usually
+  reports that one difference. It's harmless while the update services stay off.
+- On 2011-2012 MacBooks with Windows installed in UEFI mode, the audio controller can't start (Device
+  Manager code 10): a firmware limitation, not something this project changes. Apple's supported setup
+  for those models is BIOS (legacy) mode.
 - The Wi-Fi picker parses `netsh` output and only works on English-language Windows.
 
 ## Credits

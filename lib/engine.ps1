@@ -9,32 +9,40 @@
 
 $script:Mode = 'WhatIf'
 $script:JournalPath = $null
-$script:Journal = New-Object System.Collections.Generic.List[object]
-$script:Keys = @{}
+$script:PmwJournal = New-Object System.Collections.Generic.List[object]
+$script:PmwJournalKeys = @{}
 $script:SystemQueue = New-Object System.Collections.Generic.List[object]
 $script:Counts = @{ ok = 0; change = 0; fail = 0; skip = 0 }
 
 function Initialize-Engine([string]$Mode, [string]$JournalPath) {
     $script:Mode = $Mode
     $script:JournalPath = $JournalPath
-    $script:Journal.Clear(); $script:Keys = @{}; $script:SystemQueue.Clear()
+    $script:PmwJournal.Clear(); $script:PmwJournalKeys = @{}; $script:SystemQueue.Clear()
     $script:Counts = @{ ok = 0; change = 0; fail = 0; skip = 0 }
     if ($JournalPath -and (Test-Path $JournalPath)) {
-        foreach ($e in @(Get-Content $JournalPath -Raw | ConvertFrom-Json)) { $script:Journal.Add($e); $script:Keys[$e.Key] = $true }
+        foreach ($e in (Read-Journal $JournalPath)) { $script:PmwJournal.Add($e); $script:PmwJournalKeys[$e.Key] = $true }
     }
+}
+
+# The journal's entries as an array. Windows PowerShell 5.1's ConvertFrom-Json emits a JSON array as ONE
+# pipeline object, so @(... | ConvertFrom-Json) is a one-element array holding the whole list; assigning
+# to a variable first and then wrapping it gives the elements.
+function Read-Journal([string]$Path) {
+    $parsed = Get-Content $Path -Raw | ConvertFrom-Json
+    , @($parsed)
 }
 
 function Save-Journal {
     if (-not $script:JournalPath) { return }
     $dir = Split-Path $script:JournalPath
     if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Force $dir | Out-Null }
-    ConvertTo-Json -InputObject @($script:Journal.ToArray()) -Depth 6 | Set-Content $script:JournalPath -Encoding UTF8
+    ConvertTo-Json -InputObject @($script:PmwJournal.ToArray()) -Depth 6 | Set-Content $script:JournalPath -Encoding UTF8
 }
 
 function Add-JournalEntry([string]$Key, [hashtable]$Entry) {
-    if ($script:Keys.ContainsKey($Key)) { return }
+    if ($script:PmwJournalKeys.ContainsKey($Key)) { return }
     $Entry.Key = $Key
-    $script:Journal.Add([pscustomobject]$Entry); $script:Keys[$Key] = $true
+    $script:PmwJournal.Add([pscustomobject]$Entry); $script:PmwJournalKeys[$Key] = $true
     Save-Journal
 }
 
@@ -203,9 +211,13 @@ function Set-FeatureDisabled([string]$Name, [string]$Area = 'feature') {
 
 # AppX removal can't be undone by the uninstaller; the journal only lists what went (Store reinstall).
 function Remove-AppxEverywhere([string]$Name, [string]$Area = 'app') {
-    $installed = @(Get-AppxPackage -AllUsers -Name $Name -EA SilentlyContinue)
+    $all = @(Get-AppxPackage -AllUsers -Name $Name -EA SilentlyContinue)
+    $installed = @($all | ? { -not $_.NonRemovable })   # system components Windows won't remove
     $prov = @(Get-AppxProvisionedPackage -Online -EA SilentlyContinue | ? DisplayName -eq $Name)
-    if (-not $installed -and -not $prov) { Write-Step $Area $Name 'ok'; return }
+    if (-not $installed -and -not $prov) {
+        if ($all) { Write-Step $Area $Name 'skip' 'part of Windows, not removable' } else { Write-Step $Area $Name 'ok' }
+        return
+    }
     if ($script:Mode -ne 'Apply') { Write-Step $Area $Name 'change' 'installed'; return }
     Add-JournalEntry "appx|$Name" @{ Type = 'appx'; Name = $Name }
     try {

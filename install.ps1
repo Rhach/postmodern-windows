@@ -77,12 +77,13 @@ if ($Part -eq 'Machine') {
         $opt = Get-Options
         if ($mode -eq 'Apply') {
             New-Item -ItemType Directory -Force $stateDir | Out-Null
-            $saved = @{}; foreach ($n in $optionNames) { $saved[$n] = $opt[$n] }
+            # switches as plain booleans: a SwitchParameter serialises to {"IsPresent":false}, which reads back as true
+            $saved = @{}; foreach ($n in $optionNames) { $saved[$n] = if ($opt[$n] -is [System.Management.Automation.SwitchParameter]) { [bool]$opt[$n] } else { $opt[$n] } }
             $saved | ConvertTo-Json | Set-Content "$stateDir\options.json" -Encoding UTF8
         }
         $c = Invoke-Modules 'machine' $opt (Join-Path $stateDir 'journal-machine.json')
         Write-Host ("`n  machine: {0} changed, {1} already fine, {2} failed" -f $c.change, $c.ok, $c.fail)
-        $code = if ($c.fail) { 1 } else { 0 }
+        $code = if ($c.fail) { 1 } elseif ($mode -eq 'Check' -and $c.change) { 3 } else { 0 }   # 3: doctor found differences
     } catch { Write-Host "  machine part stopped: $($_.Exception.Message)" -ForegroundColor Red; $code = 2 }
     if ($Log) { Stop-Transcript | Out-Null }
     exit $code
@@ -96,6 +97,10 @@ if (-not $Force -and -not ($os.Major -eq 10 -and $os.Build -ge 19041 -and $os.Bu
 }
 
 Write-Host "`n  postmodern-windows  ·  $(@{ Apply = 'install'; WhatIf = 'dry run: nothing will change'; Check = 'doctor' }[$mode])`n" -ForegroundColor Cyan
+if ($mode -eq 'Check' -and -not (Test-Path "$stateDir\options.json")) {
+    Write-Host '  postmodern-windows is not installed on this PC (nothing to check). To preview an install: install.ps1 -WhatIf'
+    exit 0
+}
 
 if ($mode -ne 'Check') {
     if (-not $Theme) {
@@ -145,11 +150,12 @@ Write-Host "`n  [user: $env:USERNAME]" -ForegroundColor Cyan
 $c = Invoke-Modules 'user' (Get-Options) (Join-Path $env:LOCALAPPDATA 'postmodern-windows\journal-user.json')
 Write-Host ("`n  user: {0} changed, {1} already fine, {2} failed" -f $c.change, $c.ok, $c.fail)
 
-$failed = $machineCode -ne 0 -or $c.fail
+$failed = ($machineCode -ne 0 -and $machineCode -ne 3) -or $c.fail
 switch ($mode) {
     'WhatIf' { Write-Host "`n  Dry run finished: nothing was changed." -ForegroundColor Cyan }
     'Check' {
-        if ($c.change -or $machineCode) { Write-Host "`n  Some settings differ from the installed state (listed above). Re-run install.ps1 to fix them." -ForegroundColor Yellow }
+        if ($c.change -or $machineCode -eq 3) { Write-Host "`n  Some settings differ from the installed state (listed above). Re-run install.ps1 to fix them." -ForegroundColor Yellow }
+        elseif ($machineCode) { Write-Host "`n  The machine-wide checks could not all run (listed above)." -ForegroundColor Yellow }
         else { Write-Host "`n  Everything matches the installed state." -ForegroundColor Green }
     }
     'Apply' {

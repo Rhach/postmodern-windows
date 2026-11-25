@@ -20,7 +20,7 @@ $notes = New-Object System.Collections.Generic.List[string]
 
 function Undo([string]$Journal) {
     if (-not (Test-Path $Journal)) { Write-Host '  nothing recorded'; return 0 }
-    $entries = @(Get-Content $Journal -Raw | ConvertFrom-Json)
+    $entries = Read-Journal $Journal
     [array]::Reverse($entries)
     # files and folders go last: the install folder holds the journal and this script
     $entries = @($entries | ? { $_.Type -ne 'path' }) + @($entries | ? { $_.Type -eq 'path' })

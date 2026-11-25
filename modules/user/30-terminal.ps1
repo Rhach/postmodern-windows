@@ -6,8 +6,11 @@ $sha = '273D6F1502ECA1B5BD95C43F5D4D7EC72CC503DF340102F8659717E5BEAD3437'
 $dir = Join-Path $env:LOCALAPPDATA 'postmodern-windows\terminal'
 $exe = Join-Path $dir 'WindowsTerminal.exe'
 
-$have = if (Test-Path $exe) { (Get-Item $exe).VersionInfo.ProductVersion } else { $null }
-if ($have -like "$ver*") { Write-Step 'terminal' "Windows Terminal $ver" 'ok' }
+# the exe's own version number doesn't match the release name (1.25.3131.0 reports 1.25.261109001),
+# so the installed release is recorded in a marker file next to it
+$marker = Join-Path $dir '.pmw-version'
+$have = if ((Test-Path $exe) -and (Test-Path $marker)) { (Get-Content $marker -Raw).Trim() } elseif (Test-Path $exe) { 'unknown version' } else { $null }
+if ($have -eq $ver) { Write-Step 'terminal' "Windows Terminal $ver" 'ok' }
 elseif ($script:Mode -ne 'Apply') { Write-Step 'terminal' "Windows Terminal $ver" 'change' $(if ($have) { "has $have" } else { 'not installed' }) }
 else {
     try {
@@ -19,6 +22,7 @@ else {
         New-Item -ItemType Directory -Force $dir | Out-Null
         Copy-Item (Join-Path $inner.FullName '*') $dir -Recurse -Force
         New-Item -ItemType File (Join-Path $dir '.portable') -Force | Out-Null   # settings next to the exe
+        Set-Content $marker $ver
         Remove-Item $tmp -Recurse -Force
         Write-Step 'terminal' "Windows Terminal $ver" 'change'
     } catch { Write-Step 'terminal' "Windows Terminal $ver" 'fail' $_.Exception.Message }

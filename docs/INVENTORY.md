@@ -102,7 +102,8 @@ StateRepository, Time Zone, Management\Provisioning, Office (keeps Office itself
 
 | Item | Disposition |
 |---|---|
-| AppX: OutlookForWindows, DevHome, Wallet, Advertising.Xaml, MicrosoftEdgeDevToolsClient (also deprovisioned) | core |
+| AppX: OutlookForWindows, DevHome (also deprovisioned) | core |
+| AppX: Wallet, Advertising.Xaml, MicrosoftEdgeDevToolsClient | no: attempted on the reference machine, but Windows refuses to remove them |
 | Optional features: PowerShell v2, WorkFolders-Client, XPS services, MSRDC-Infrastructure, SmbDirect, WCF-TCP-PortSharing45, Internet Printing client | core (PowerShell v2 removal is a security win) |
 | `SearchApp.exe` renamed via takeown | **no** — fragile file-ownership hack, irrelevant without Explorer |
 
